@@ -7,8 +7,15 @@ from VAEGAN.models.conditional_generator import ConditionGenerator
 from VAEGAN.utils import Contrast_depth_loss, AverageMeter
 import neptune.new as neptune
 import torch.optim as opt
+import lightning as L
 
 from tqdm.auto import tqdm
+
+
+fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto")
+fabric.launch()
+
+
 
 ##################################
 ####### TRAINING SETTINGS ########
@@ -28,7 +35,7 @@ CKPT_DIR = 'checkpoints/conditional_generator'
 if not CKPT_DIR.endswith('/'):
     CKPT_DIR += '/'
 
-MODEL_NAME = ''
+MODEL_NAME = 'conditonal_generator_mobilenetv3'
 
 SAVE_BEST = False
 
@@ -69,6 +76,13 @@ loss_cdl = Contrast_depth_loss()
 
 
 ##################################
+##### SETUP LIGHTNING FABRIC #####
+##################################
+model, optimizer, loss_cdl, scheduler = fabric.setup(model, optimizer, loss_cdl, scheduler)
+train_loader, val_laoder = fabric.setup_dataloaders(train_loader, val_loader)
+
+
+##################################
 ###### NEPTUNE AI LOGGER #########
 ##################################
 run = neptune.init_run(
@@ -98,7 +112,8 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
         inputs, map_label, spoof_label = batch[0].float().cuda(), batch[1].float().cuda(), batch[2].float().cuda()
         map_x = model(batch,1)
         loss = loss_mse(map_label, map_x) + loss_cdl(map_label, map_x)
-        loss.backward()
+        # loss.backward()
+        fabric.backward(loss)
 
         train_avm.update(loss)
 
@@ -123,7 +138,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
         val_avm.reset()
         with torch.no_grad():
             for idx, batch in enumerate(tqdm(val_loader, leave= False, desc='Validating')):
-                inputs, map_label, spoof_label = batch[0].float().cuda(), batch[1].float().cuda(), batch[2].float().cuda()
+                inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
                 map_x = model(batch,1)
                 loss = loss_mse(map_label, map_x) + loss_cdl(map_label, map_x)
                 val_avm.update(loss)
@@ -131,19 +146,21 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
                 run['loss/val'].append(loss)
                 run['loss/val_avg'].append(val_avm.avg)
     
-        if epoch % SAVE_CHECKPOINT_EVERY_N_VAL_EPOCHS == 0:
+        if epoch % (SAVE_CHECKPOINT_EVERY_N_VAL_EPOCHS * VAL_EPOCH_EVERY_N_TRAIN_EPOCHS) == 0:
             
             if SAVE_BEST and val_avm.avg < best_loss:
                 best_loss = val_avm.avg
                 torch.save({'model_checkpoint': model.state_dict(),
                             'optimizer_checkpoint': optimizer.state_dict(),
                             'scheduler_checkoint': scheduler.state_dict(),
-                            'epoch': epoch
-                            }, f'{CKPT_DIR}{MODEL_NAME}:best-epoch{epoch}.pth')
+                            'epoch': epoch,
+                            'loss': val_avm.avg,
+                            }, f'{CKPT_DIR}{MODEL_NAME}:best.pth')
                 
             torch.save({'model_checkpoint': model.state_dict(),
                         'optimizer_checkpoint': optimizer.state_dict(),
                         'scheduler_checkoint': scheduler.state_dict(),
-                        'epoch': epoch
+                        'epoch': epoch,
+                        'loss': val_avm.avg,
                         }, f'{CKPT_DIR}{MODEL_NAME}:last.pth')
 
