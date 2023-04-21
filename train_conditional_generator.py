@@ -52,6 +52,7 @@ GAMMA = 0.5
 ##################################
 ############## DATA ##############
 ##################################
+
 transform = transforms.Compose([transforms.RandomRotation(.15), transforms.RandomHorizontalFlip()])
 
 train_data = StandardDataset('Data/train_img', transform= transform)
@@ -105,7 +106,7 @@ train_avm = AverageMeter()
 val_avm = AverageMeter()
 
 for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
-    ep_bar.set_description(f'Epoch {epoch}')
+    ep_bar.set_description(f'Epoch {epoch}/{EPOCHS}')
 
     model.train()
     for idx, batch in enumerate(tqdm(train_loader, leave= False, desc='Training')):
