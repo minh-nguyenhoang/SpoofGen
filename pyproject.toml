@@ -16,4 +16,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["spoof_gen","spoof_gen/models"]
+packages = ["spoof_gen"]
