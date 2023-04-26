@@ -14,6 +14,7 @@ from tqdm.auto import tqdm
 
 fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto")
 fabric.launch()
+fabric.seed_everything(1273)
 
 
 
@@ -48,12 +49,38 @@ STEP_SIZE = 10
 GAMMA = 0.5
 
 
+##################################
+###### NEPTUNE AI LOGGER #########
+##################################
+RUN_ID = None
+
+if RUN_ID is None:
+    run = neptune.init_run(
+        project="minhnguyen/Generate-spoof-from-real-images",
+        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiIwNThiYzVhMy0xYzM4LTQ5ZmItOWFkZC00YmIzODljNzM1MmUifQ==",
+        # with_id=
+    )  
+else:
+    try:
+        run = neptune.init_run(
+            project="minhnguyen/Generate-spoof-from-real-images",
+            api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiIwNThiYzVhMy0xYzM4LTQ5ZmItOWFkZC00YmIzODljNzM1MmUifQ==",
+            with_id= RUN_ID
+    )  
+    except Exception as e:
+        # raise ValueError("The RUN_ID provided is invalid")
+        print(e)
+
+
+optimizer_params = { "optimizer": "Adam", "learning_rate": LR, 'scheduler': "StepLR", 'step_size': STEP_SIZE, 'gamma': GAMMA}
+run["parameters"] = optimizer_params
+
 
 ##################################
 ############## DATA ##############
 ##################################
 
-transform = transforms.Compose([transforms.RandomRotation(.15), transforms.RandomHorizontalFlip()])
+transform = transforms.Compose([transforms.RandomRotation(30), transforms.RandomHorizontalFlip()])
 
 train_data = StandardDataset('Data/train_img', transform= transform)
 train_loader = DataLoader(train_data, batch_size= BATCH_SIZE, shuffle= True)
@@ -66,7 +93,7 @@ val_loader = DataLoader(val_data, batch_size= int(1.5*BATCH_SIZE), shuffle= Fals
 ## MODEL, LOSS, OPTIMIZER, ECT. ##
 ##################################
 
-model = ConditionGenerator().cuda()
+model = ConditionGenerator()
 
 optimizer = opt.Adam(model.parameters(),lr = LR)
 scheduler = opt.lr_scheduler.StepLR(optimizer= optimizer, step_size= STEP_SIZE, gamma= GAMMA)
@@ -79,21 +106,9 @@ loss_cdl = Contrast_depth_loss()
 ##################################
 ##### SETUP LIGHTNING FABRIC #####
 ##################################
-model, optimizer, loss_cdl, scheduler = fabric.setup(model, optimizer, loss_cdl, scheduler)
+model, optimizer, scheduler = fabric.setup(model, optimizer, scheduler)
+loss_cdl = fabric.setup(loss_cdl)
 train_loader, val_laoder = fabric.setup_dataloaders(train_loader, val_loader)
-
-
-##################################
-###### NEPTUNE AI LOGGER #########
-##################################
-run = neptune.init_run(
-    project="minhnguyen/Generate-spoof-from-real-images",
-    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiIwNThiYzVhMy0xYzM4LTQ5ZmItOWFkZC00YmIzODljNzM1MmUifQ==",
-    # with_id=
-)  
-
-optimizer_params = {"learning_rate": LR, "optimizer": "Adam", 'step_size': STEP_SIZE, 'gamma': GAMMA}
-run["parameters"] = optimizer_params
 
 
 
@@ -110,7 +125,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
 
     model.train()
     for idx, batch in enumerate(tqdm(train_loader, leave= False, desc='Training')):
-        inputs, map_label, spoof_label = batch[0].float().cuda(), batch[1].float().cuda(), batch[2].float().cuda()
+        inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
         map_x = model(batch,1)
         loss = loss_mse(map_label, map_x) + loss_cdl(map_label, map_x)
         # loss.backward()
@@ -126,7 +141,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
             optimizer.step()
             optimizer.zero_grad()
 
-    # update model parameters at the end of the epoch
+    # update model parameters at the end of the epoch if the final batch has smaller size than ACCUMULATED_OPTIMIZER_STEP
     optimizer.step()
     optimizer.zero_grad()
     

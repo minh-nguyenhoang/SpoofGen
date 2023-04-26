@@ -30,7 +30,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, model = 'unet', skip_z = True, bilinear = False, cdc = True) -> None:
+    def __init__(self, model = 'unet',*, skip_z = True, bilinear = False, cdc = True) -> None:
 
         '''
         Other settings aside from model only affect the Unet-like Decoder, the reversed ResNet might be supported later. 

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "VAEGAN"
+version = "0.0.1"
+authors = []
+description = "Generate real and spoof face images from any image"
+readme = "README.md"
+requires-python = ">=3.7"
+
+dependencies = [
+    "numpy",
+    "opencv-python",
+]
+
+[tool.setuptools]
+packages = ["spoof_gen"]
