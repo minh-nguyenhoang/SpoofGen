@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "spoof_gen"
 version = "0.0.1"
 authors = []
-description = "Generate real and spoof face images from any image"
+description = "Generate real and spoof face images from any face image"
 readme = "README.md"
 requires-python = ">=3.7"
 
@@ -16,4 +16,4 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["VAEGAN"]
+packages = ["spoof_gen","spoof_gen/models"]

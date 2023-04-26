@@ -3,8 +3,8 @@ import torch.nn as nn
 from data_utils import StandardDataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from VAEGAN.models.conditional_generator import ConditionGenerator
-from VAEGAN.utils import Contrast_depth_loss, AverageMeter
+from spoof_gen.models.conditional_generator import ConditionGenerator
+from spoof_gen.utils import Contrast_depth_loss, AverageMeter
 import neptune.new as neptune
 import torch.optim as opt
 import lightning as L
