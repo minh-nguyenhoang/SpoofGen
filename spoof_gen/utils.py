@@ -23,12 +23,14 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def contrast_depth_conv(input, device='cuda'):
+def contrast_depth_conv(input : torch.Tensor):
     ''' compute contrast depth in both of (out, label) '''
     '''
         input  32x32
         output 8x32x32
     '''
+
+    device = input.device
 
     kernel_filter_list = [
         [[1, 0, 0], [0, -1, 0], [0, 0, 0]], [[0, 1, 0], [0, -1, 0],
@@ -55,23 +57,22 @@ def contrast_depth_conv(input, device='cuda'):
     return contrast_depth
 
 # Pearson range [-1, 1] so if < 0, abs|loss| ; if >0, 1- loss
-class Contrast_depth_loss(nn.Module):
-    def __init__(self,device='cuda'):
-        super(Contrast_depth_loss, self).__init__()
-        self.device= device
+class Contrast_depth_loss:
+    def __init__(self):
+        pass
 
-    def forward(self, out, label,):
+    def __call__(self, out, label):
         '''
         compute contrast depth in both of (out, label),
         then get the loss of them
         tf.atrous_convd match tf-versions: 1.4
         '''
 
-        contrast_out = contrast_depth_conv(out,device=self.device)
+        contrast_out = contrast_depth_conv(out)
         
-        contrast_label = contrast_depth_conv(label,device=self.device)
+        contrast_label = contrast_depth_conv(label)
 
-        criterion_MSE = nn.MSELoss().to(self.device)
+        criterion_MSE = nn.MSELoss()
 
         loss = criterion_MSE(contrast_out, contrast_label)
         #loss = torch.pow(contrast_out - contrast_label, 2)
