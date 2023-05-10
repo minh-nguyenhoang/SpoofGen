@@ -12,7 +12,7 @@ class StandardDataset(Dataset):
         self.transform = transform
         self.preprocess()
         if preload:
-            with open(f'./{self.root_dir.upper()}Imfile.txt', 'r+') as f:
+            with open(f'./{self.root_dir}Imfile.txt', 'r+') as f:
                 lines = f.readlines()
                 self.lines = [path.strip().split(" ") for path in lines]
             os.remove(f'./{self.root_dir.upper()}Imfile.txt')
@@ -23,7 +23,7 @@ class StandardDataset(Dataset):
         if self.lines is not None:
             return len(self.lines)
 
-        with open(f'./{self.root_dir.upper()}Imfile.txt', 'r+') as f:
+        with open(f'./{self.root_dir}Imfile.txt', 'r+') as f:
             len_ds = len(f.readlines())
         return len_ds-1
 
@@ -32,7 +32,7 @@ class StandardDataset(Dataset):
         if self.lines is not None:
             dir, filename = self.lines[idx][0], self.lines[idx][1]
         else:
-            with open(f'./{self.root_dir.upper()}Imfile.txt', 'r+') as f:
+            with open(f'./{self.root_dir}Imfile.txt', 'r+') as f:
                 lines = f.readlines()
             dir, filename = lines[idx].strip().split(" ")
 
@@ -71,7 +71,7 @@ class StandardDataset(Dataset):
         return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
 
     def preprocess(self):
-        with open(f'./{self.root_dir.upper()}Imfile.txt', 'w+') as f:
+        with open(f'./{self.root_dir}Imfile.txt', 'w+') as f:
             # self.data = {'color':[] , 'depth':[]}
             dir = self.root_dir + r'/color'
             for filename in os.listdir(dir):
