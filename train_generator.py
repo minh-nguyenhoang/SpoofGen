@@ -239,7 +239,7 @@ if VALIDATION_CHECKER:
             generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
             ### critic take action
             d_real = crit_model(inputs, condition)
-            d_gen = crit_model(generated, condition)
+            d_gen = crit_model(generated.detach(), condition)
 
             gen_mu, gen_log_var = gen_model.encoder(generated.detach())
         
@@ -254,10 +254,13 @@ if VALIDATION_CHECKER:
             
             crit_optimizer.zero_grad()
 
+            # generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
+            d_gen1 = crit_model(generated, condition)
+
             rec_loss = loss_mse(inputs, generated)
             kl_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
             sim_loss = torch.mean(-0.5 * torch.sum(log_var - gen_log_var - ((gen_mu - mu) ** 2)/gen_log_var.exp() - (log_var - gen_log_var).exp(), dim = 1), dim = 0)
-            gen_loss = (rec_loss.mean() + .2 * kl_loss + .2 * sim_loss) - d_gen.mean()
+            gen_loss = (rec_loss.mean() + .2 * kl_loss + .2 * sim_loss) - d_gen1.mean()
 
             fabric.backward(gen_loss)
             gen_optimizer.zero_grad()
