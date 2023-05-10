@@ -13,4 +13,6 @@ requires-python = ">=3.7"
 dependencies = [
     "numpy",
     "opencv-python",
+    "neptune-client",
+    "lightning"
 ]
