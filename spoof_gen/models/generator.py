@@ -25,6 +25,7 @@ class Encoder(nn.Module):
         #                             nn.Linear(512*expansion*16*16,ENCODE_SIZE*2))
 
         if init_from is not None:
+            failed_states = []
             try:
                 failed_states = self.load_pretrain_backbone(init_from)
             finally:

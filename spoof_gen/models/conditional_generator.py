@@ -42,6 +42,7 @@ class ConditionGenerator(nn.Module):
                                        nn.ReLU(inplace= True))
         
         if init_from is not None:
+            failed_states = []
             try:
                 failed_states = self.load_pretrain_backbone(init_from)
             finally:
