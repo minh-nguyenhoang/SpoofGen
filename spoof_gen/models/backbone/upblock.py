@@ -134,7 +134,7 @@ class UNetDecoder(nn.Module):
             out = self.l3(out)
 
             # return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)
-            return out   # [N,3,256,256]
+            return torch.sigmoid(out)   # [N,3,256,256]
 
 def build_decoder_unet(skip_z = True, bilinear = False, cdc = True):
     
