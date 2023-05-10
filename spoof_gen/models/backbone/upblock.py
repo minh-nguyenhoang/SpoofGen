@@ -65,7 +65,7 @@ class Up(nn.Module):
             self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True,)
             self.conv = DoubleConv(in_channels, out_channels, in_channels // 2, basic_conv= conv)
         else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=2, stride=2)
+            self.up = nn.ConvTranspose2d(out_channels, out_channels, kernel_size=2, stride=2)
             self.conv = DoubleConv(in_channels, out_channels, basic_conv= conv)
 
     def forward(self, x):
@@ -89,7 +89,7 @@ class SkipUp(nn.Module):
             self.up = nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=True,)
             self.conv = conv(in_channels,out_channels)
         else:
-            self.up = nn.ConvTranspose2d(in_channels, in_channels // 2, kernel_size=scale_factor, stride=scale_factor)
+            self.up = nn.ConvTranspose2d(out_channels, out_channels, kernel_size=scale_factor, stride=scale_factor)
             self.conv = conv(in_channels,out_channels)
 
     def forward(self, x):
@@ -106,13 +106,13 @@ class UNetDecoder(nn.Module):
 
             ## 32 -> 32 -> 64 -> 128 -> 256
             
-            self.first_conv = DoubleConv(4,64,basic_conv= Conv2d_cd)   # [N,64,32,32]
+            self.first_conv = DoubleConv(2,64,basic_conv= Conv2d_cd)   # [N,64,32,32]
             self.l1 = Up(64,32,bilinear= self.bilinear, cdc= self.cdc)               # [N,32,64,64]
             self.l2 = Up(32,16,bilinear= self.bilinear, cdc= self.cdc)                # [N,16,128,128]
-            self.l3 = Up(16,6,bilinear= self.bilinear, cdc= self.cdc)                # [N,6,256,256]
+            self.l3 = Up(16,3,bilinear= self.bilinear, cdc= self.cdc)                # [N,3,256,256]
 
             if skip_z:
-                self.skip_l1 = Conv2d_cd(4,64)
+                self.skip_l1 = SkipUp(4,64,1,bilinear= self.bilinear, cdc= self.cdc)
                 self.skip_l2 = SkipUp(4,32,2,bilinear= self.bilinear, cdc= self.cdc)
                 self.skip_l3 = SkipUp(4,16,4,bilinear= self.bilinear, cdc= self.cdc)
 
@@ -133,7 +133,8 @@ class UNetDecoder(nn.Module):
 
             out = self.l3(out)
 
-            return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)
+            # return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)
+            return out   # [N,3,256,256]
 
 def build_decoder_unet(skip_z = True, bilinear = False, cdc = True):
     

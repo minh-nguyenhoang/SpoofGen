@@ -37,14 +37,14 @@ class StandardDataset(Dataset):
             dir, filename = lines[idx].strip().split(" ")
 
         ## only choosing real face with depth map
-        while 'fake' in dir+filename:
-            idx = random.randint(0, self.__len__()-1)
-            if self.lines is not None:
-                dir, filename = self.lines[idx][0], self.lines[idx][1]
-            else:
-                with open(f'./{self.root_dir.upper()}Imfile.txt', 'r+') as f:
-                    lines = f.readlines()
-                dir, filename = lines[idx].strip().split(" ")
+        # while 'fake' in dir+filename:
+        #     idx = random.randint(0, self.__len__()-1)
+        #     if self.lines is not None:
+        #         dir, filename = self.lines[idx][0], self.lines[idx][1]
+        #     else:
+        #         with open(f'./{self.root_dir.upper()}Imfile.txt', 'r+') as f:
+        #             lines = f.readlines()
+        #         dir, filename = lines[idx].strip().split(" ")
 
 
         rgb_im = torch.Tensor(cv2.resize(cv2.imread(

@@ -22,6 +22,23 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+class ExponentialMeter(object):
+    """Computes and stores the exponential average and current value"""
+    def __init__(self, weight : float = .4):
+        self.reset(weight = weight)
+
+    def reset(self, weight : float = .4):
+        assert 0 < weight <1
+        self.weight = weight
+        self.val = 0
+        self.avg = 0
+        self.count = 0
+
+    def update(self, val : float):
+        self.val = val
+        self.count += 1
+        self.avg = self.weight * val + (1 - self.weight) * self.avg
+   
 
 def contrast_depth_conv(input : torch.Tensor):
     ''' compute contrast depth in both of (out, label) '''

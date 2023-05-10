@@ -68,11 +68,15 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Sequential(nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
-                                   nn.BatchNorm2d(64),
-                                   nn.ReLU(inplace=True),
-                                   nn.MaxPool2d(2,2)
-                                   )
+        # change the stride from 2 to 1
+        # self.conv1 = nn.Sequential(nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
+        #                            nn.BatchNorm2d(64),
+        #                            nn.ReLU(inplace=True),
+        #                            nn.MaxPool2d(3,2,1))
+        self.conv1 = nn.Conv2d(3, self.in_planes, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(self.in_planes)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         # self.layer1 = self._make_layer(block, 64, layers[0])
         # self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
         # self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
@@ -83,7 +87,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
 
         # last layer to compress channel down to 128
-        self.last_conv = nn.Conv2d(512 * block.expansion,128,1,1,0, bias= False)
+        # self.last_conv = nn.Conv2d(512 * block.expansion,128,1,1,0, bias= False)
 
         
         
@@ -98,13 +102,18 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         # x [3,256,256]
-        out = self.conv1(x)                #[64,128,128]
-        out = self.layer1(out)             #[64,128,128]
-        out = self.layer2(out)             #[128,64,64] 
-        out = self.layer3(out)             #[256,32,32]
-        out = self.layer4(out)             #[512,16,16]
+        # out = self.conv1(x)                #[64,64,64]
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.maxpool(out)
         
-        out = self.last_conv(out)          #[128,16,16]
+        out = self.layer1(out)             #[64,64,64]
+        out = self.layer2(out)             #[128,32,32] 
+        out = self.layer3(out)             #[256,16,16]
+        out = self.layer4(out)             #[512,8,8]
+        
+        # out = self.last_conv(out)          #[128,16,16]
         return out
     
 def resnet(mode = '18'):

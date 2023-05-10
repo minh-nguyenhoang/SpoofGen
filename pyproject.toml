@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spoof_gen"
-version = "0.0.1"
+version = "0.0.2"
 authors = []
 description = "Generate real and spoof face images from any face image"
 readme = "README.md"

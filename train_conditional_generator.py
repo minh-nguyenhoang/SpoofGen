@@ -154,7 +154,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
     ep_bar.set_description(f'Epoch {epoch}/{EPOCHS}')
 
     model.train()
-    for idx, batch in enumerate(tqdm(train_loader, leave= False, desc='Training')):
+    for idx, batch in enumerate(pbar := tqdm(train_loader, leave= False, desc='Training')):
         inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
         map_x = model(inputs,1)
         loss = loss_mse(map_label, map_x) + loss_cdl(map_label, map_x)
@@ -166,6 +166,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
         run['loss/train'].append(loss)
         run['loss/train_avg'].append(train_avm.avg)
 
+        pbar.set_postfix({'loss': loss, 'epoch_loss': train_avm.avg})
         # update model parameters every n batches
         if (idx + 1) % ACCUMULATED_OPTIMIZER_STEP == 0:
             optimizer.step()
@@ -183,7 +184,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
         model.eval()
         # val_avm.reset()
         with torch.no_grad():
-            for idx, batch in enumerate(tqdm(val_loader, leave= False, desc='Validating')):
+            for idx, batch in enumerate(pbar := tqdm(val_loader, leave= False, desc='Validating')):
                 inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
                 map_x = model(inputs,1)
                 loss = loss_mse(map_label, map_x) + loss_cdl(map_label, map_x)
@@ -191,6 +192,9 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
 
                 run['loss/val'].append(loss)
                 run['loss/val_avg'].append(val_avm.avg)
+
+                pbar.set_postfix({'loss': loss, 'epoch_loss': val_avm.avg})
+
                 if idx == 5:
                     run['sample_images'].append(create_logging_plot(inputs, map_x, map_label))   
     
@@ -211,6 +215,8 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
                         'epoch': epoch,
                         'loss': val_avm.avg,
                         }, f'{CKPT_DIR}{MODEL_NAME}_last.pth')
+            
+    ep_bar.set_postfix({'train_loss': train_avm.avg, 'val_loss': val_avm.avg})
 
 
 

@@ -1,19 +1,18 @@
 import torch
 import torch.nn as nn
-from conditional_generator import ConditionGenerator
-from utils import Conv2d_cd
+# from conditional_generator import ConditionGenerator
+from ..utils import Conv2d_cd
 
 
 class Critic(nn.Module):
-    def __init__(self, input_dims = (256,256,3), out_dims = 2) -> None:
+    def __init__(self, input_dims = (256,256,3)) -> None:
         super().__init__()
         self.input_dims = input_dims
-        self.out_dims = out_dims
 
-        self.con_gen = ConditionGenerator()
-        self.con_gen.eval()
-        for params in self.con_gen.parameters():
-            params.requires_grad = False
+        # self.con_gen = ConditionGenerator()
+        # self.con_gen.eval()
+        # for params in self.con_gen.parameters():
+        #     params.requires_grad = False
 
         self.upsampler = nn.Upsample((input_dims[0],input_dims[1]),mode = 'bilinear')
 
@@ -45,8 +44,11 @@ class Critic(nn.Module):
 
     def forward(self,x, condition):
         # map_x = self.con_gen(x,condition)
-        map_x = self.upsampler(condition).unsqueeze(1)
-        input = torch.stack([x,map_x],dim = 1)
+        
+        map_x = self.upsampler(condition.unsqueeze(1))
+        # print(map_x.shape)
+        # print(x.shape)
+        input = torch.cat([x,map_x],dim = 1)
 
         score = self.critic(input)
 

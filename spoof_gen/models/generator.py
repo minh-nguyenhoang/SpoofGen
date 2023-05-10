@@ -1,32 +1,74 @@
 import torch
 import torch.nn as nn
-from .backbone import mobilenet, resnet, upblock, revnet
+from .backbone import mobilenet, resnet, upblock, revnet, iresnet
+import warnings
 
+ENCODE_SIZE = 32*32
 
 
 class Encoder(nn.Module):
-    def __init__(self, model = 'mobilenet',) -> None:
+    def __init__(self, model = 'iresnet-50', init_from = None) -> None:
         super().__init__()
 
-        assert model in ['resnet-18','mobilenet','resnet-34','resnet-50','resnet-101','resnet-152']
+        assert model in ['iresnet-18','iresnet-34','iresnet-50','iresnet-100','iresnet-200']
 
-        if 'resnet' in model:
+        if 'iresnet' in model:
             model, n_layers = model.split('-')
-            self.backbone = resnet.resnet(n_layers)
+            self.backbone = iresnet.iresnet(n_layers,ENCODE_SIZE)
         else:
-            n_layers = None
-            self.backbone = mobilenet.mobilenet()  #[128,16,16]
+            raise Exception("Please choose a valid IResNet model, the mobilenet version is not supported right now!")
+        # else:
+        #     n_layers = None
+        #     self.backbone = mobilenet.mobilenet()  #[128,8,8]
 
-        self.encode = nn.Sequential(nn.Flatten(1),
-                                    nn.Linear(128*16*16,32*32*2))
+        # self.encode = nn.Sequential(nn.Flatten(1),
+        #                             nn.Linear(512*expansion*16*16,ENCODE_SIZE*2))
+
+        if init_from is not None:
+            try:
+                failed_states = self.load_pretrain_backbone(init_from)
+            finally:
+                if len(failed_states) != 0:
+                    warnings.warn('During loading the weights, these states fail to load: '+ ', '.join(fs for fs in failed_states))
+                else:
+                    print('All states are loaded successfully!')
         
     def forward(self,x):
         z = self.backbone(x)
-        z = self.encode(z)
+        # z = self.encode(z)
         
-        mu, l_var = torch.split(z,split_size_or_sections= 32*32, dim = 1)
+        mu, l_var = torch.split(z,split_size_or_sections= ENCODE_SIZE, dim = 1)
 
         return mu, l_var
+    
+    def load_backbone_state_dict(self, state_dict, strict: bool = True):
+        return self.backbone.load_state_dict(state_dict, strict)
+
+    def load_pretrain_backbone(self, state_dict):
+
+        own_state = self.backbone.state_dict()
+        failed_states = []
+
+        if isinstance(state_dict, str):
+            state_dict = torch.load(state_dict, lambda storage, loc: storage)
+        
+        for name, param in state_dict.items():
+            if name not in own_state:
+                failed_states.append(name)
+                # print(name)
+                continue
+            if own_state[name].shape != param.shape:
+                failed_states.append(name)
+                continue       
+            own_state[name].copy_(param)
+            # own_state[name].eval()
+            # own_state[name].require_grads = False
+            self.backbone._modules[name.split('.')[0]].eval()
+            self.backbone._modules[name.split('.')[0]].require_grads = False
+        
+        return failed_states
+
+
 
 
 class Decoder(nn.Module):
@@ -45,32 +87,76 @@ class Decoder(nn.Module):
             self.up = revnet.revnet(n_layers)
 
     def forward(self,z, condition):
-        assert condition.shape[1] == 2
 
-        inp = torch.cat([z,condition[:,0].unsqueeze(1),z,condition[:,1].unsqueeze(1)],dim = 1) #[N,4,32,32]
+        inp = torch.cat([z,condition.unsqueeze(1)],dim = 1) #[N,2,32,32]
         return self.up(inp)
     
 class Generator(nn.Module):
-    def __init__(self, encoder:Encoder, decoder:Decoder, con_gen) -> None:
+    def __init__(self, encoder:Encoder, decoder:Decoder, con_gen: nn.Module) -> None:
         super().__init__()
-
+        '''
+        For evaluation
+        '''
         self.encoder = encoder
         self.decoder = decoder
         self.con_gen = con_gen
 
-    def forward(self, x):
-        r_condition = self.con_gen(x,1)
-        s_condition = self.con_gen(x,0).cuda()
-        condition = torch.stack([r_condition,s_condition], dim = 1)
-        mu, log_sigma = self.encoder(x)
+        # self.encoder.eval()
+        # for params in self.encoder.parameters():
+        #     params.requires_grad = False
+
+
+        self.con_gen.eval()
+        for params in self.con_gen.parameters():
+            params.requires_grad = False
+
+    def forward(self, x, condition):
+        # assert condition in [0,1], "The condition must be 0 or 1!"
+        device = next(self.parameters()).device
+        condition = self.con_gen(x,condition).detach()
+        # condition = torch.stack([r_condition,s_condition], dim = 1)
+        mu, log_var = self.encoder(x)
 
         # print(mu.shape, log_sigma.shape)
 
-        z = mu + torch.randn((log_sigma.shape)).cuda() * torch.exp(log_sigma)
+        z = mu + torch.rand_like(log_var).to(device) \
+                            * torch.exp(0.5*log_var)
         z = z.view(z.shape[0],1,32,32)
 
-        out = self.decoder(z,condition)
+        out = self.decoder(z,condition)    # [N,3,256,256]
 
-        return out
+        return out, condition, (mu, log_var)
+    
+    def sample(self,
+            num_samples:int,
+            label,
+            **kwargs) -> torch.Tensor:
+        '''
+        Samples from the latent space and return the corresponding
+        image space map.
+        :param num_samples: (Int) Number of samples
+        :param current_device: (Int) Device to run the model
+        :return: (Tensor)
+        '''
+
+        current_device = next(self.decoder.parameters()).device
+        y = kwargs['labels'].float()
+        z = torch.randn(num_samples,
+                        32*32)
+
+        z = z.to(current_device)
+
+        z = torch.cat([z, y], dim=1)
+        samples = self.decoder(z)
+        return samples
+
+    def generate(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        """
+        Given an input image x, returns the reconstructed image
+        :param x: (Tensor) [B x C x H x W]
+        :return: (Tensor) [B x C x H x W]
+        """
+
+        return self.forward(x, *args, **kwargs)[0]
 
 

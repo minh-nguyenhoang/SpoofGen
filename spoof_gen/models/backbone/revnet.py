@@ -66,7 +66,7 @@ class RevResNet(nn.Module):
         super(RevResNet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Sequential(nn.Conv2d(4, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False),
+        self.conv1 = nn.Sequential(nn.Conv2d(2, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False),
                                    nn.BatchNorm2d(self.in_planes),
                                    nn.ReLU(inplace=True),
                                 #    nn.Upsample(scale_factor=2, mode= 'bilinear')
@@ -81,7 +81,7 @@ class RevResNet(nn.Module):
         self.layer4 = self._make_layer(block, 32, num_blocks[3], stride=2)
 
         # last layer to compress channel down to 128
-        self.last_conv = nn.Conv2d(32 * block.expansion,6,1)
+        self.last_conv = nn.Conv2d(32 * block.expansion,3,1)
 
         
         
@@ -102,8 +102,9 @@ class RevResNet(nn.Module):
         out = self.layer3(out)             #[N,128,128,128]
         out = self.layer4(out)             #[N,64,256,256]
         
-        out = self.last_conv(out)          #[N,6,256,256]
-        return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)  # [2,N,3,256,256]
+        out = self.last_conv(out)          #[N,3,256,256]
+        # return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)  # [2,N,3,256,256]
+        return out
     
 def revnet(mode = '18'):
     assert mode in ['18','34','50','101','152']
