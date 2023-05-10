@@ -15,7 +15,7 @@ class StandardDataset(Dataset):
             with open(f'./{self.root_dir}Imfile.txt', 'r+') as f:
                 lines = f.readlines()
                 self.lines = [path.strip().split(" ") for path in lines]
-            os.remove(f'./{self.root_dir.upper()}Imfile.txt')
+            os.remove(f'./{self.root_dir}Imfile.txt')
         else:
             self.lines = None
 
