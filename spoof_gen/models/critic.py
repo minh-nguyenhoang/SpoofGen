@@ -38,7 +38,8 @@ class Critic(nn.Module):
             Conv2d_cd(128, 1, kernel_size=3, stride=1, padding=1, bias=False),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(32*32,1)
+            nn.Linear(32*32,1),
+            nn.Tanh()
         )
 
 
