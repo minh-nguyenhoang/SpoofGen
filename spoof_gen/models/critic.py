@@ -53,3 +53,16 @@ class Critic(nn.Module):
         score = self.critic(input)
 
         return score
+    
+    def get_grad(self):
+        grad = []
+        for param in self.parameters():
+            grad.append(param.grad.clone().detach())
+        self.grad_ = grad
+        del grad
+    
+    def load_grad(self):
+        for param in self.parameters():
+            param.grad.copy_(self.grad_.pop(0))
+
+        del self.grad_

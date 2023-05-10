@@ -16,6 +16,10 @@ import lightning as L
 from tqdm.auto import tqdm
 
 
+
+
+
+
 fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto")
 fabric.launch()
 fabric.seed_everything(1273)
@@ -289,8 +293,9 @@ if VALIDATION_CHECKER:
     #     exit()
 
 
-raw = input("Seem OK, press Enter to exit")
-exit()
+raw = input("Seem OK, press Enter to continue or Q to exit.")
+if raw.lower() == 'q':
+    exit()
 ##################################
 ###### NEPTUNE AI LOGGER #########
 ##################################
@@ -332,8 +337,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
         ## create a generated batch 
         generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
 
-        ### deatch the generated images so the grad of generator will not be update here
-        generated = generated.detach()
+        
 
         #####################
         ## CRITIC TRAINING ##
@@ -341,7 +345,8 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
 
         ### critic take action
         d_real = crit_model(inputs, condition)
-        d_gen = crit_model(generated, condition)
+        ### deatch the generated images so the grad of generator will not be update here
+        d_gen = crit_model(generated.detach(), condition)
 
         gp = gradient_penalty(critic_model= crit_model, real_data= inputs, generated_data= generated, condition= condition,\
                               neptune_runner= run)
@@ -368,7 +373,7 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
 
         if (idx + 1) % GENERATOR_STEP_EVERY_N_CRITIC_STEP:
             ## create a generated batch 
-            generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
+            # generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
             d_gen = crit_model(generated, condition)
 
             gen_mu, gen_log_var = gen_model.encoder(generated.detach())
@@ -380,10 +385,11 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1))):
 
             gen_loss = (rec_loss.mean() + .2 * kl_loss + .2 * sim_loss) - d_gen.mean()
 
+            crit_model.get_grad()
 
             fabric.backward(gen_loss)
             ### clear the gradients for critic
-            crit_optimizer.zero_grad()
+            crit_model.load_grad()
 
             gen_train_avm.update(gen_loss)
 
