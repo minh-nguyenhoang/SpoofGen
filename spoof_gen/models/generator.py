@@ -114,7 +114,7 @@ class Generator(nn.Module):
     def forward(self, x, condition):
         # assert condition in [0,1], "The condition must be 0 or 1!"
         device = next(self.parameters()).device
-        condition = self.con_gen(x,condition).detach()
+        condition = self.con_gen(x,condition).clone().detach()
         # condition = torch.stack([r_condition,s_condition], dim = 1)
         mu, log_var = self.encoder(x)
 
