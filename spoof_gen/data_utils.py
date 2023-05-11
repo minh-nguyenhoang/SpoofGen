@@ -9,14 +9,7 @@ import random
 class StandardDataset(Dataset):
     def __init__(self, root_dir='',  transform=None, preload=True, **kwarg):
         self.root_dir = root_dir
-        new_transform = []
-        self.cj = False
-        for tran in transform:
-            if isinstance(tran, transforms.ColorJitter):
-                self.cj = True
-            else:
-                new_transform.append(tran)
-        self.transform = transforms.Compose(new_transform)
+        self.transform = transform
         self.preprocess()
         if preload:
             with open(f'./{self.root_dir}Imfile.txt', 'r+') as f:
@@ -69,10 +62,6 @@ class StandardDataset(Dataset):
         sample = torch.cat((rgb_im, depth_im), dim=0)
 
         sample = self.transform(sample)
-        if self.cj:
-            # sample[:3] = transforms.ColorJitter(brightness=.2)(sample[:3])
-            sample[:3] = transforms.ColorJitter(
-                brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1)(sample[:3])
             
 
         return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
@@ -88,14 +77,8 @@ class StandardDataset(Dataset):
 class CombinedDataset(Dataset):
     def __init__(self, root_dir:list[str]= [''],  transform=None, preload=True, **kwarg):
         self.root_dir = root_dir
-        new_transform = []
-        self.cj = False
-        for tran in transform:
-            if isinstance(tran, transforms.ColorJitter):
-                self.cj = True
-            else:
-                new_transform.append(tran)
-        self.transform = transforms.Compose(new_transform)
+        
+        self.transform = transforms.Compose(transform)
         self.preprocess()
         if preload:
             with open(f'./{self.filename.upper()}Imfile.txt', 'r+') as f:
@@ -130,10 +113,6 @@ class CombinedDataset(Dataset):
 
         sample = torch.cat((rgb_im, depth_im), dim=0)
         sample = self.transform(sample)
-        if self.cj:
-            # sample[:3] = transforms.ColorJitter(brightness=.2)(sample[:3])
-            sample[:3] = transforms.ColorJitter(
-                brightness=0.4, contrast=0.3, saturation=0.2, hue=0.1)(sample[:3])
         return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
 
     def preprocess(self):
