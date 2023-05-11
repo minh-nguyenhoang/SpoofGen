@@ -60,8 +60,8 @@ class StandardDataset(Dataset):
         label = 0 if 'fake' in dir+filename else 1
 
         sample = torch.cat((rgb_im, depth_im), dim=0)
-
-        sample = self.transform(sample)
+        if self.transform is not None:
+            sample = self.transform(sample)
             
 
         return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
@@ -112,7 +112,8 @@ class CombinedDataset(Dataset):
         label = 0 if 'fake' in dir+filename else 1
 
         sample = torch.cat((rgb_im, depth_im), dim=0)
-        sample = self.transform(sample)
+        if self.transform is not None:
+            sample = self.transform(sample)
         return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
 
     def preprocess(self):
