@@ -3,7 +3,8 @@ import torch.nn as nn
 from .backbone import mobilenet, resnet, upblock, revnet, iresnet
 import warnings
 
-ENCODE_SIZE = 32*32
+ENCODE_SIZE = 16*16
+SQRT_ENCODE_SIZE = torch.sqrt(torch.tensor(ENCODE_SIZE)).int().item()
 
 
 class Encoder(nn.Module):
@@ -122,7 +123,7 @@ class Generator(nn.Module):
 
         z = mu + torch.rand_like(log_var).to(device) \
                             * torch.exp(0.5*log_var)
-        z = z.view(z.shape[0],1,32,32)
+        z = z.view(z.shape[0],1,SQRT_ENCODE_SIZE,SQRT_ENCODE_SIZE)
 
         out = self.decoder(z,condition)    # [N,3,256,256]
 

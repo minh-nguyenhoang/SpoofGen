@@ -5,8 +5,10 @@ from .backbone.mobilenet import mobilenet
 import warnings
 
 class ConditionGenerator(nn.Module):
-    def __init__(self, init_from = None) -> None:
+    def __init__(self,output_shape:int = 16, init_from = None) -> None:
         super().__init__()
+        self.shape = (output_shape,output_shape)
+        self.upsampler = nn.Upsample(self.shape,mode= 'bilinear')
 
         # self.generator = nn.Sequential(
         #     nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1, bias=False),
@@ -63,9 +65,13 @@ class ConditionGenerator(nn.Module):
         output = []
         for cond in condition:
             if cond == 0:
-                output.append((torch.rand((1,32,32))/10).abs().clip(0,1).to(device))
+                output.append((torch.rand((1,*self.shape))/5).abs().clip(0,1).to(device))
             else:
-                output.append(self.last_conv(self.generator(x[len(output)].unsqueeze(0))).squeeze(1) + (torch.rand((1,32,32))/10).abs().clip(0,1).to(device))    #[N,32,32]
+                output.append(self.upsampler(\
+                    self.last_conv(\
+                    self.generator(\
+                    x[len(output)].unsqueeze(0)))).squeeze(1) + \
+                    (torch.rand((1,*self.shape))/5).abs().clip(0,1).to(device))    #[N,32,32]
         
         return torch.cat(output,dim= 0)
     

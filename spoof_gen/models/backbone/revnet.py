@@ -64,7 +64,7 @@ class RevBottleneck(nn.Module):
 class RevResNet(nn.Module):
     def __init__(self, block, num_blocks):
         super(RevResNet, self).__init__()
-        self.in_planes = 64
+        self.in_planes = 16
 
         self.conv1 = nn.Sequential(nn.Conv2d(2, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False),
                                    nn.BatchNorm2d(self.in_planes),
@@ -75,8 +75,8 @@ class RevResNet(nn.Module):
         # self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
         # self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
         # self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
-        self.layer1 = self._make_layer(block, 256, num_blocks[0], stride=1)
-        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer1 = self._make_layer(block, 32, num_blocks[0], stride=2)
+        self.layer2 = self._make_layer(block, 64, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 32, num_blocks[3], stride=2)
 
