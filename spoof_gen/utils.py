@@ -24,15 +24,20 @@ class AverageMeter(object):
 
 class ExponentialMeter(object):
     """Computes and stores the exponential average and current value"""
-    def __init__(self, weight : float = .4):
-        self.reset(weight = weight)
+    def __init__(self, init : float= None, weight : float = .4):
+        self.reset(init= init,weight = weight)
 
-    def reset(self, weight : float = .4):
+    def reset(self,init , weight : float = .4):
         assert 0 < weight <1
         self.weight = weight
-        self.val = 0
-        self.avg = 0
-        self.count = 0
+        if init is not None:
+            self.val = init
+            self.avg = init
+            self.count = 0
+        else:          
+            self.val = 0
+            self.avg = 0
+            self.count = 0
 
     def update(self, val : float):
         self.val = val
