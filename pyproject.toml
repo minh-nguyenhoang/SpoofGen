@@ -14,5 +14,7 @@ dependencies = [
     "numpy",
     "opencv-python",
     "neptune-client",
-    "lightning"
+    "lightning",
+    "tensorboardX",
+    "comet_ml",
 ]
