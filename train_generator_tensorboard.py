@@ -19,6 +19,23 @@ from tqdm.auto import tqdm
 from torchsummary import summary
 
 
+
+##################################
+###### TENSORBOARDX LOGGER #######
+##################################
+TENSORBOARD_LOGDIR = None
+COMET_EXPERIMENT_KEY = None
+comet_config = {"api_key" : "0I4vcVpuefcoLxavIPszjBsyF",
+                "project_name" : "spoof-gen",
+                "workspace": "minh-nguyenhoang",
+                "disabled": False,
+                "experiment_key": COMET_EXPERIMENT_KEY}
+if COMET_EXPERIMENT_KEY is None:
+    comet_config.pop("experiment_key", None)
+
+writer = SummaryWriter(logdir = TENSORBOARD_LOGDIR,comet_config = comet_config)
+
+
 #################################
 ######### AMP TRAINING ##########
 #################################
@@ -272,25 +289,21 @@ if DECODER_CHECKPOINT is not None:
 init_step = max([crit_step, encoder_step, decoder_step])
 init_gen_loss = min(init_decoder_loss, init_encoder_loss)
 
-##################################
-###### TENSORBOARDX LOGGER #######
-##################################
 
-writer = SummaryWriter(comet_config = {  
-                "api_key" : "0I4vcVpuefcoLxavIPszjBsyF",
-                "project_name" : "spoof-gen",
-                "workspace": "minh-nguyenhoang",
-                "disabled": False
-})
 
+##########################################
+## Log hyperparameters to SummaryWriter ##
+##########################################
 
 hparams = {'steps': STEPS,'batch_size': BATCH_SIZE,'accumalated_steps': ACCUMULATED_OPTIMIZER_STEP, "optimizer": "Adam", "learning_rate": LR, 'scheduler': "StepLR",
            'step_size': STEP_SIZE, 'gamma': GAMMA}
-
-writer.add_hparams(
-    hparam_dict=hparams,
-    metric_dict={}
-)
+try:
+    writer.add_hparams(
+        hparam_dict=hparams,
+        metric_dict={}
+    )
+except:
+    pass
 
 
 
