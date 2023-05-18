@@ -65,17 +65,18 @@ class Critic(nn.Module):
         return score
     
     def get_grad(self):
-        grad = []
-        for param in self.parameters():
-            grad.append(param.grad.clone().detach() if param.grad is not None else None)
+        grad = {}
+        for name, param in self.named_parameters():
+            grad[name] = (param.grad.clone().detach() if param.grad is not None else None)
         self.grad_ = grad
         del grad
     
     def load_grad(self):
-        for param in self.parameters():
-            if param.grad is not None:
-                param.grad.copy_(self.grad_.pop(0))  
-            else:
-                continue
+        if hasattr(self,'grad_'):
+            for name,param in self.named_parameters():
+                if param.grad is not None:
+                    param.grad.copy_(self.grad_[name])  
+                else:
+                    continue
 
-        del self.grad_
+            del self.grad_
