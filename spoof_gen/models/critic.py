@@ -1,8 +1,17 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 # from conditional_generator import ConditionGenerator
 from ..utils import Conv2d_cd
 
+
+class ScaledTanh(nn.Module):
+    def __init__(self, scale = 10) -> None:
+        super().__init__()
+        self.scale = nn.Parameter(scale, requires_grad= False)
+    
+    def foward(self, x):
+        return self.scale * F.tanh(x)
 
 class Critic(nn.Module):
     def __init__(self, input_dims = (256,256,3)) -> None:
@@ -18,28 +27,28 @@ class Critic(nn.Module):
 
         self.critic = nn.Sequential(
             Conv2d_cd(4, 64, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
+            # nn.BatchNorm2d(64),
+            nn.LeakyReLU(0.2),
             Conv2d_cd(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
+            # nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),         #[128,128,128]
             Conv2d_cd(128, 256, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
+            # nn.BatchNorm2d(256),
+            nn.LeakyReLU(0.2),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),        #[256,64,64]
             Conv2d_cd(256, 512, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(512),
-            nn.ReLU(), 
+            # nn.BatchNorm2d(512),
+            nn.LeakyReLU(0.2), 
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),        #[512,32,32]
             Conv2d_cd(512, 128, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
+            # nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2),
             Conv2d_cd(128, 1, kernel_size=3, stride=1, padding=1, bias=False),
-            nn.ReLU(),
+            nn.LeakyReLU(0.2),
             nn.Flatten(),
             nn.Linear(32*32,1),
-            nn.Tanh()
+            ScaledTanh()
         )
 
 
