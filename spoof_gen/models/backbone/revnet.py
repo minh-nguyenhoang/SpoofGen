@@ -76,12 +76,12 @@ class RevResNet(nn.Module):
         # self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
         # self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
         self.layer1 = self._make_layer(block, 32, num_blocks[0], stride=2)
-        self.layer2 = self._make_layer(block, 64, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 32, num_blocks[3], stride=2)
+        self.layer2 = self._make_layer(block, 24, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 16, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 8, num_blocks[3], stride=2)
 
         # last layer to compress channel down to 1
-        self.last_conv = nn.Sequential(nn.Conv2d(32 * block.expansion,3,1),
+        self.last_conv = nn.Sequential(nn.Conv2d(8 * block.expansion,3,kernel_size = 1),
                                        nn.Sigmoid())
 
         
