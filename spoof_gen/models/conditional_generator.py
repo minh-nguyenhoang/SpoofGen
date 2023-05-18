@@ -71,7 +71,7 @@ class ConditionGenerator(nn.Module):
                     self.last_conv(\
                     self.generator(\
                     x[len(output)].unsqueeze(0)))).squeeze(1) + \
-                    (torch.rand((1,*self.shape))/5).abs().clip(0,1).to(device))    #[N,32,32]
+                    (torch.rand((1,*self.shape))/5).abs().clip(0,1).to(device))    #[N,16,16]
         
         return torch.cat(output,dim= 0)
     
@@ -83,6 +83,9 @@ class ConditionGenerator(nn.Module):
 
         if isinstance(state_dict, str):
             state_dict = torch.load(state_dict, lambda storage, loc: storage)
+        
+        if 'model_checkpoint' in state_dict.keys():
+            state_dict = state_dict['model_checkpoint']
         
         for name, param in state_dict.items():
             
@@ -98,7 +101,7 @@ class ConditionGenerator(nn.Module):
             else:
                 if name.split('.')[0] not in failed_layers:
                     own_state[name].copy_(param)
-                    if not isinstance((module := self.backbone._modules[name.split('.')[0]]), torch.nn.BatchNorm1d):
+                    if not isinstance((module := self._modules[name.split('.')[0]]), torch.nn.BatchNorm1d):
                         module.eval()
         
         return failed_states

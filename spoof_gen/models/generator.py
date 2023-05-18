@@ -79,10 +79,15 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, model = 'unet',*, skip_z = True, bilinear = False, cdc = True) -> None:
+    def __init__(self, model = 'unet',*, skip_z = True, bilinear = False, cdc = True, self_attn= False) -> None:
 
         '''
-        Other settings aside from model only affect the Unet-like Decoder, the reversed ResNet might be supported later. 
+        Parameters:
+            - skip_z: Wether to append the latent embbeding to each layer of the model. Default: True.\n
+            - bilinear: Wether to use bilinear upsampling for the model, else use TransposedConvolution. Default: False.\n
+            - cdc: Wether to use central difference convolution for the Convolution operator. Default: True.\n
+            - self_attn: Wether to use self attention as describe in Self-Attention GAN. Default: False.\n
+        Other settings aside from model and self_attn only affect the Unet-like Decoder, the reversed ResNet might be supported later. 
         '''
 
         super().__init__()
@@ -91,7 +96,7 @@ class Decoder(nn.Module):
             self.up = upblock.build_decoder_unet(skip_z= skip_z, bilinear= bilinear, cdc= cdc)
         else:
             model, n_layers = model.split('-')
-            self.up = revnet.revnet(n_layers)
+            self.up = revnet.revnet(n_layers, self_attn)
 
     def forward(self,z, condition):
 
