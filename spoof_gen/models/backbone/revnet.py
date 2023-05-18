@@ -6,6 +6,20 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class PixelNorm(nn.Module):
+    """
+    PixelNorm PixelNorm from PG GAN
+    thanks https://github.com/facebookresearch/pytorch_GAN_zoo/blob/b75dee40918caabb4fe7ec561522717bf096a8cb/models/networks/custom_layers.py#L9
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+    def forward(self, x, epsilon=1e-8):
+        return x * (((x ** 2).mean(dim=1, keepdim=True) + epsilon).rsqrt())
+
 class Self_Attn(nn.Module):
     """ Self attention Layer"""
     def __init__(self,in_dim,activation):
@@ -47,15 +61,15 @@ class RevBasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1):
         super(RevBasicBlock, self).__init__()
         self.conv1 = nn.ConvTranspose2d(in_planes, planes, kernel_size=stride+2, stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = PixelNorm(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = PixelNorm(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
                 nn.ConvTranspose2d(in_planes, self.expansion*planes, kernel_size=stride, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
+                PixelNorm(self.expansion*planes)
             )
 
     def forward(self, x):
@@ -72,17 +86,17 @@ class RevBottleneck(nn.Module):
     def __init__(self, in_planes, planes, stride=1):
         super(RevBottleneck, self).__init__()
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(planes)
+        self.bn1 = PixelNorm(planes)
         self.conv2 = nn.ConvTranspose2d(planes, planes, kernel_size=stride+2, stride=stride, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(planes)
+        self.bn2 = PixelNorm(planes)
         self.conv3 = nn.Conv2d(planes, self.expansion*planes, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
+        self.bn3 = PixelNorm(self.expansion*planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
                 nn.ConvTranspose2d(in_planes, self.expansion*planes, kernel_size=stride, stride=stride, bias=False),
-                nn.BatchNorm2d(self.expansion*planes)
+                PixelNorm(self.expansion*planes)
             )
 
     def forward(self, x):
@@ -100,20 +114,16 @@ class RevResNet(nn.Module):
         self.in_planes = 16
         self.self_attn = self_attn
         self.conv1 = nn.Sequential(nn.Conv2d(2, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False),
-                                   nn.BatchNorm2d(self.in_planes),
+                                   PixelNorm(self.in_planes),
                                    nn.ReLU(inplace=True),
                                 #    nn.Upsample(scale_factor=2, mode= 'bilinear')
                                    )
-        # self.layer1 = self._make_layer(block, 64, layers[0])
-        # self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0])
-        # self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1])
-        # self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2])
         self.layer1 = self._make_layer(block, 32, num_blocks[0], stride=2)
         self.layer2 = self._make_layer(block, 24, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 16, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 8, num_blocks[3], stride=2)
 
-        # last layer to compress channel down to 1
+        # last layer to compress channel down to 3
         self.last_conv = nn.Sequential(nn.Conv2d(8 * block.expansion,3,kernel_size = 1),
                                        nn.Sigmoid())
 
@@ -131,12 +141,12 @@ class RevResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        # x [N,4,32,32]
-        out = self.conv1(x)                #[N,512,32,32]
-        out = self.layer1(out)             #[N,512,32,32]
-        out = self.layer2(out)             #[N,256,64,64] 
-        out = self.layer3(out)             #[N,128,128,128]
-        out = self.layer4(out)             #[N,64,256,256]
+        # x [N,4,16,16]
+        out = self.conv1(x)                #[N,16,16,16]
+        out = self.layer1(out)             #[N,32,32,32]
+        out = self.layer2(out)             #[N,24,64,64] 
+        out = self.layer3(out)             #[N,16,128,128]
+        out = self.layer4(out)             #[N,8,256,256]
         
         out = self.last_conv(out)          #[N,3,256,256]
         # return torch.stack(torch.split(out,split_size_or_sections= 3, dim = 1), dim = 0)  # [2,N,3,256,256]
