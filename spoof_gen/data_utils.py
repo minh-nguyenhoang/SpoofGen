@@ -64,7 +64,7 @@ class StandardDataset(Dataset):
             sample = self.transform(sample)
             
 
-        return (sample[:3], torch.Tensor(cv2.resize(sample[3].numpy(), (32, 32))), label, dir+filename)
+        return (sample[:3], torch.tensor(cv2.resize(sample[3].numpy(), (32, 32))), torch.tensor(label), dir+filename)
 
     def preprocess(self):
         with open(f'./{self.root_dir}Imfile.txt', 'w+') as f:
