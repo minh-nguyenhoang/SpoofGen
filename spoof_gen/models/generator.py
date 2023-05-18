@@ -50,23 +50,28 @@ class Encoder(nn.Module):
 
         own_state = self.backbone.state_dict()
         failed_states = []
+        failed_layers=[]
 
         if isinstance(state_dict, str):
             state_dict = torch.load(state_dict, lambda storage, loc: storage)
         
         for name, param in state_dict.items():
+            
             if name not in own_state:
                 failed_states.append(name)
+                failed_layers.append(name.split('.')[0])
                 # print(name)
                 continue
             if own_state[name].shape != param.shape:
                 failed_states.append(name)
+                failed_layers.append(name.split('.')[0])
+                self.backbone._modules[name.split('.')[0]].train()
                 continue       
-            own_state[name].copy_(param)
-            # own_state[name].eval()
-            # own_state[name].require_grads = False
-            self.backbone._modules[name.split('.')[0]].eval()
-            self.backbone._modules[name.split('.')[0]].require_grads = False
+            else:
+                if name.split('.')[0] not in failed_layers:
+                    own_state[name].copy_(param)
+                    if not isinstance((module := self.backbone._modules[name.split('.')[0]]), torch.nn.BatchNorm1d):
+                        module.eval()
         
         return failed_states
 
