@@ -44,16 +44,30 @@ class ExponentialMeter(object):
         self.count += 1
         self.avg = self.weight * val + (1 - self.weight) * self.avg
    
-def get_infinite_data(data_loader, n = -1, init_step :int = None):
+def get_infinite_data(data_loader, n, init_step :int = None):
     step = 0 if init_step is None else init_step
     while True:
         for batch in data_loader:
-            step +=1
-            if step >= n:
+            step = step + 1
+            if n >= 0 and step > n:
                 return
             yield step , batch
 
 
+class InfiniteDataLoader:
+    def __init__(self, dataloader, step, init_step = None) -> None:
+        init_step = 0 if init_step is None else init_step
+        self.len = None if step < 0 else (step - init_step) 
+        self.dataloader = get_infinite_data(dataloader, step, init_step)
+        
+    def __len__(self):
+        return max(self.len, 0)
+    
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self.dataloader)
 
 def contrast_depth_conv(input : torch.Tensor):
     ''' compute contrast depth in both of (out, label) '''
