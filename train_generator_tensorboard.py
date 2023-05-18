@@ -1,5 +1,4 @@
 import comet_ml
-from numpy import NaN
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -10,13 +9,15 @@ from torchvision import transforms
 from spoof_gen.models.generator import Encoder, Decoder, Generator
 from spoof_gen.models.conditional_generator import ConditionGenerator
 from spoof_gen.models.critic import Critic
-from spoof_gen.utils import Contrast_depth_loss, AverageMeter, ExponentialMeter
-from tensorboardX import SummaryWriter
+from spoof_gen.utils import AverageMeter, ExponentialMeter, get_infinite_data
+## from tensorboardX import SummaryWriter
+from spoof_gen.logging import SummaryWriter
 import torch.optim as opt
 import lightning as L
 import os
 from tqdm.auto import tqdm
 from torchsummary import summary
+
 
 #################################
 ######### AMP TRAINING ##########
@@ -25,10 +26,6 @@ USE_AMP = False
 torch.backends.cudnn.benchmark = False
 scaler = torch.cuda.amp.GradScaler(init_scale=4096.0)
 
-# if USE_AMP:
-#     fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto", precision= "16-mixed")
-# else:
-#     fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto")
 
 fabric = L.Fabric(accelerator="cuda", devices=1, strategy="auto")
 fabric.launch()
@@ -75,10 +72,10 @@ EPS = 1e-3 if USE_AMP else 1e-9
 ##################################
 ####### TRAINING SETTINGS ########
 ##################################
-EPOCHS = 100
+STEPS = 100000
 BATCH_SIZE = 1
 ACCUMULATED_OPTIMIZER_STEP = 4
-VAL_EPOCH_EVERY_N_TRAIN_EPOCHS = 1
+VAL_EPOCH_EVERY_N_TRAIN_STEPS = 1000
 SAVE_CHECKPOINT_EVERY_N_VAL_EPOCHS = 1
 
 GENERATOR_STEP_EVERY_N_CRITIC_STEP = 5
@@ -145,8 +142,8 @@ SAVE_BEST = True
 
 def save_checkpoint(sub_dir,*,
                     model, optimizer:torch.optim.Optimizer = None, scheduler:torch.optim.lr_scheduler._LRScheduler = None, 
-                    loss_meter : AverageMeter|ExponentialMeter = None, best_loss = None, epoch:int = None, save_best = SAVE_BEST, writer = None):
-    assert not save_best or (loss_meter is not None and best_loss is not None and epoch is not None), 'If you want to save the best checkpoint, please provide a loss meter, current best loss and epoch/step!'
+                    loss_meter : AverageMeter|ExponentialMeter = None, best_loss = None, step:int = None, save_best = SAVE_BEST, writer = None):
+    assert not save_best or (loss_meter is not None and best_loss is not None and step is not None), 'If you want to save the best checkpoint, please provide a loss meter, current best loss and step!'
     
     ## Just for Validation checker before actually running the training process
     if 'test' in sub_dir:
@@ -163,7 +160,7 @@ def save_checkpoint(sub_dir,*,
         torch.save({'model_checkpoint': model.state_dict(),
                     'optimizer_checkpoint': optimizer.state_dict() if optimizer is not None else None,
                     'scheduler_checkpoint': scheduler.state_dict() if scheduler is not None else None,
-                    'epoch': epoch,
+                    'step': step,
                     'loss': loss_meter.avg,
                     }, f'{CKPT_DIR}{sub_dir}{MODEL_NAME[sub_dir]}_best.pth')
         # if not test and writer is not None:
@@ -172,7 +169,7 @@ def save_checkpoint(sub_dir,*,
     torch.save({'model_checkpoint': model.state_dict(),
                 'optimizer_checkpoint': optimizer.state_dict() if optimizer is not None else None,
                 'scheduler_checkpoint': scheduler.state_dict() if scheduler is not None else None,
-                'epoch': epoch if epoch is not None else None,
+                'step': step if step is not None else None,
                 'loss': loss_meter.avg if loss_meter is not None else None,
                 }, f'{CKPT_DIR}{sub_dir}{MODEL_NAME[sub_dir]}_last.pth')
     # if not test and writer is not None:
@@ -193,7 +190,7 @@ def save_checkpoint(sub_dir,*,
 LR = 1e-4
 BETA_1 = .5
 BETA_2 = .999
-STEP_SIZE = EPOCHS // 3
+STEP_SIZE = STEPS // 3
 GAMMA = 0.3
 
 
@@ -247,35 +244,33 @@ train_loader, val_loader = fabric.setup_dataloaders(train_loader, val_loader)
 
 
 ## Load the previous training session weights if possible. 
-## Bring this behind fabric setup follow advices on https://discuss.pytorch.org/t/expected-all-tensors-to-be-on-the-same-device-but-found-at-least-two-devices-cuda-0-and-cpu/101693/7
-## TODO: rewrite this to a function
-### Critic checkpoint
+## Bring this behind fabric setup follow advices on 
+## https://discuss.pytorch.org/t/expected-all-tensors-to-be-on-the-same-device-but-found-at-least-two-devices-cuda-0-and-cpu/101693/7
+## TODO: rewrite this to a function (DONE!)
+
+def load_checkpoint(ckpt, model, optimizer= None, scheduler= None):
+    ckpt = torch.load(ckpt, lambda storage, loc: storage)
+    model.load_state_dict(ckpt['model_checkpoint'])
+    if optimizer is not None and ckpt['optimizer_checkpoint'] is not None:
+        optimizer.load_state_dict(ckpt['optimizer_checkpoint'])
+    if scheduler is not None and ckpt['scheduler_checkpoint'] is not None:
+        scheduler.load_state_dict(ckpt['scheduler_checkpoint'])
+    step = ckpt['step']
+    loss = ckpt['loss']
+
+    return step, loss
+
+crit_step, encoder_step, decoder = 0
+init_crit_loss, init_encoder_loss, init_decoder_loss = 1000
 if CRITIC_CHECKPOINT is not None:
-    crit_ckpt = torch.load(CRITIC_CHECKPOINT, lambda storage, loc: storage)
-    crit_model.load_state_dict(crit_ckpt['model_checkpoint'])
-    if crit_ckpt['optimizer_checkpoint'] is not None:
-        crit_optimizer.load_state_dict(crit_ckpt['optimizer_checkpoint'])
-    if crit_ckpt['scheduler_checkpoint'] is not None:
-        crit_scheduler.load_state_dict(crit_ckpt['scheduler_checkpoint'])
-### Encoder checkpoint
+    crit_step, init_crit_loss = load_checkpoint(CRITIC_CHECKPOINT, crit_model, crit_optimizer, crit_scheduler)
 if ENCODER_CHECKPOINT is not None:
-    encoder_ckpt = torch.load(ENCODER_CHECKPOINT, lambda storage, loc: storage)
-    gen_model.encoder.load_state_dict(encoder_ckpt['model_checkpoint'])
-    if encoder_ckpt['optimizer_checkpoint'] is not None:
-        gen_optimizer.load_state_dict(encoder_ckpt['optimizer_checkpoint'])
-    if encoder_ckpt['scheduler_checkpoint'] is not None:
-        gen_scheduler.load_state_dict(encoder_ckpt['scheduler_checkpoint'])
-### Decoder checkpoint
+    encoder_step, init_encoder_loss = load_checkpoint(ENCODER_CHECKPOINT, gen_model.encoder, gen_optimizer, gen_scheduler)
 if DECODER_CHECKPOINT is not None:
-    decoder_ckpt = torch.load(DECODER_CHECKPOINT, lambda storage, loc: storage)
-    gen_model.decoder.load_state_dict(decoder_ckpt['model_checkpoint'])
-    if decoder_ckpt['optimizer_checkpoint'] is not None:
-        gen_optimizer.load_state_dict(decoder_ckpt['optimizer_checkpoint'])
-    if decoder_ckpt['scheduler_checkpoint'] is not None:
-        gen_scheduler.load_state_dict(decoder_ckpt['scheduler_checkpoint'])
+    decoder_step, init_decoder_loss = load_checkpoint(DECODER_CHECKPOINT, gen_model.decoder, None, None)
 
-
-
+init_step = max([crit_step, encoder_step, decoder_step])
+init_gen_loss = min(init_decoder_loss, init_encoder_loss)
 
 ##################################
 ###### TENSORBOARDX LOGGER #######
@@ -289,7 +284,7 @@ writer = SummaryWriter(comet_config = {
 })
 
 
-hparams = {'epochs': EPOCHS,'batch_size': BATCH_SIZE,'accumalated_steps': ACCUMULATED_OPTIMIZER_STEP, "optimizer": "Adam", "learning_rate": LR, 'scheduler': "StepLR",
+hparams = {'steps': STEPS,'batch_size': BATCH_SIZE,'accumalated_steps': ACCUMULATED_OPTIMIZER_STEP, "optimizer": "Adam", "learning_rate": LR, 'scheduler': "StepLR",
            'step_size': STEP_SIZE, 'gamma': GAMMA}
 
 writer.add_hparams(
@@ -493,33 +488,32 @@ crit_train_avm = ExponentialMeter( weight = .3)
 crit_val_avm = ExponentialMeter( weight = .3)
 
 
+## Decompose gen_model.train() to several components, the remainings are not being updated.
+gen_model.decoder.train()
+gen_model.encoder.fc.train()
+gen_model.encoder.features.train()
+crit_model.train()
 
-for epoch in (ep_bar := tqdm(range(1,EPOCHS+1), position=0)):
-    ep_bar.set_description(f'Epoch {epoch}/{EPOCHS}')
+for step, batch in enumerate(pbar := tqdm(get_infinite_data(train_loader,STEPS, init_step= init_step), position=0, leave= False, desc='Training')):
+    inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
+    with torch.cuda.amp.autocast(enabled= USE_AMP):
+        ## create a generated batch 
+        generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
 
-    gen_model.train()
-    crit_model.train()
-    for idx, batch in enumerate(pbar := tqdm(train_loader, position=0, leave= False, desc='Training')):
-        inputs, map_label, spoof_label = batch[0].float(), batch[1].float(), batch[2].float()
-        
+    if step % (ACCUMULATED_OPTIMIZER_STEP * (GENERATOR_STEP_EVERY_N_CRITIC_STEP + 1)) < ACCUMULATED_OPTIMIZER_STEP * (GENERATOR_STEP_EVERY_N_CRITIC_STEP ):
+
+        #####################
+        ## CRITIC TRAINING ##
+        #####################
+
+        ### Detach the generated images so the grad of generator will not be update here
+        ### critic take action
         with torch.cuda.amp.autocast(enabled= USE_AMP):
-            ## create a generated batch 
-            generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
-
-        
-
-            #####################
-            ## CRITIC TRAINING ##
-            #####################
-    
-            ### deatch the generated images so the grad of generator will not be update here
-            ### critic take action
             d_real = crit_model(inputs, condition)
-            d_gen = crit_model(generated.clone().detach(), condition)
+            d_gen = crit_model(generated.detach(), condition)
             with torch.cuda.amp.autocast(enabled= False):
                 gp = gradient_penalty(critic_model= crit_model, real_data= inputs, generated_data= generated, condition= condition,\
-                                  writer= writer)
-    
+                                    writer= writer)
             ### calculating the critic loss
             crit_loss = d_gen.mean() - d_real.mean() + gp + 2
 
@@ -535,12 +529,8 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1), position=0)):
         ## Due to accumulated gradients steps and generator training steps is not the same, we can't just do crit_optimizer.zero_grad()
         ## before any critic training step and/or after any generator training step
         crit_model.get_grad()
-        
-        ## Log to Tensorboard
-        writer.add_scalars('loss/train_crit',{'val': crit_train_avm.val,'avg': crit_train_avm.avg})
-        
-    
-        if (idx + 1) % ACCUMULATED_OPTIMIZER_STEP == 0:
+
+        if step % ACCUMULATED_OPTIMIZER_STEP == 0:
             if USE_AMP:
                 scaler.step(crit_optimizer)
                 scaler.update()
@@ -548,87 +538,77 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1), position=0)):
                 crit_optimizer.step()
             crit_optimizer.zero_grad()
 
+    else:
         ########################
-        ## GENERATOR TRAINING ##  (take a step every n critic steps)
+        ## GENERATOR TRAINING ##  (take 1*ACCUMULATED_OPTIMIZER_STEP step every ACCUMULATED_OPTIMIZER_STEP * GENERATOR_STEP_EVERY_N_CRITIC_STEP critic steps)
         ########################
         
         ## TODO: May be (idx + 1) % ACCUMULATED_OPTIMIZER_STEP * GENERATOR_STEP_EVERY_N_CRITIC_STEP == 0 is more accurate when talking to accumulated training,
-        ## and then we can simutaneously train the generator for ACCUMULATED_OPTIMIZER_STEP and update that? 
+        ## and then we can simutaneously train the generator for ACCUMULATED_OPTIMIZER_STEP and update that? (DONE!)
+            # if step % GENERATOR_STEP_EVERY_N_CRITIC_STEP == 0:
+
         ## But that is quite hard to implement and we may need to store the data from last ACCUMULATED_OPTIMIZER_STEP of the critic training steps and then used them 
         ## for the training steps the generator
-        if (idx + 1) % GENERATOR_STEP_EVERY_N_CRITIC_STEP == 0:
+
             
             ## create a generated batch 
             # generated, condition, (mu, log_var) = gen_model(inputs, spoof_label)
-            with torch.cuda.amp.autocast(enabled = USE_AMP):
-                ## Take the critic score again due to the generated images has already been *detach* from the generator
-                d_gen1 = crit_model(generated, condition)
-                
-                ## Calculate the distribution of the generated data
-                gen_mu, gen_log_var = gen_model.encoder(generated)
-                ### VAE loss 
-                rec_loss = loss_mse(inputs, generated).mean()
-                
-                ## For KL-loss, we replace the sum in log space with torch.mean for more stable training (or may not:)) )
-                ## I suspect that the thing that make the generation loss explode in validation epoch is the score from critic,
-                ## so I have add a tanh activation layer at the end of the critic to prevent this
-                
-                kl_loss = torch.mean(-0.5 * torch.mean(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
-                ### Similarity loss (KL-Divergence between original and generated distribution)
-                sim_loss = torch.mean(-0.5 * torch.mean(log_var - gen_log_var - ((gen_mu - mu) ** 2)/(gen_log_var.exp() + EPS) - (log_var - gen_log_var).exp(), dim = 1), dim = 0)
-    
-                gen_loss = (rec_loss + .2 * kl_loss + .2 * sim_loss) - d_gen1.mean() + 1
-
-            if USE_AMP:
-                fabric.backward(scaler.scale(gen_loss))
-            else:
-                fabric.backward(gen_loss)
-
-            gen_train_avm.update(gen_loss.float().item())
+        with torch.cuda.amp.autocast(enabled = USE_AMP):
+            ## Take the critic score again due to the generated images has already been *detach* from the generator
+            d_gen1 = crit_model(generated, condition)
             
-            ## Load the original gradients of the critic after we backward the generator loss
-            crit_model.load_grad()
-
+            ## Calculate the distribution of the generated data
+            gen_mu, gen_log_var = gen_model.encoder(generated)
+            ### VAE loss 
+            rec_loss = loss_mse(inputs, generated).mean()
             
-        
-        
-        writer.add_scalars('loss/train_gen',{'val': gen_train_avm.val,'avg': gen_train_avm.avg})
+            ## For KL-loss, we replace the sum in log space with torch.mean for more stable training (or may not:)) )
+            ## I suspect that the thing that make the generation loss explode in validation epoch is the score from critic,
+            ## so I have add a tanh activation layer at the end of the critic to prevent this
+            
+            kl_loss = torch.mean(-0.5 * torch.mean(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+            ### Similarity loss (KL-Divergence between original and generated distribution)
+            sim_loss = torch.mean(-0.5 * torch.mean(log_var - gen_log_var - ((gen_mu - mu) ** 2)/(gen_log_var.exp() + EPS) - (log_var - gen_log_var).exp(), dim = 1), dim = 0)
 
+            gen_loss = (rec_loss + .2 * kl_loss + .2 * sim_loss) - d_gen1.mean() + 1
+
+        if USE_AMP:
+            fabric.backward(scaler.scale(gen_loss))
+        else:
+            fabric.backward(gen_loss)
+
+        gen_train_avm.update(gen_loss.float().item())
+        
+        ## Load the original gradients of the critic after we backward the generator loss
+        crit_model.load_grad()
 
         # update model parameters every n batches
-        if (idx + 1) % (ACCUMULATED_OPTIMIZER_STEP * GENERATOR_STEP_EVERY_N_CRITIC_STEP) == 0:
+        if (step + 1)  % ACCUMULATED_OPTIMIZER_STEP == 0:
             if USE_AMP:
                 scaler.step(gen_optimizer)
+                scaler.update()
                 gen_optimizer.zero_grad()
             else:
                 gen_optimizer.step()
                 gen_optimizer.zero_grad()
 
-
-        pbar.set_postfix({'crit_loss': crit_train_avm.avg, 'gen_loss': gen_train_avm.avg})
-
-
-    ## Update model parameters at the end of the epoch if the final batches has smaller size than ACCUMULATED_OPTIMIZER_STEP
-    if USE_AMP:
-        scaler.step(gen_optimizer)
-        scaler.step(crit_optimizer)
-        scaler.update()
-    else:
-        gen_optimizer.step()
-        crit_optimizer.step()
-
-    gen_optimizer.zero_grad()
-    crit_optimizer.zero_grad()
-
+        
     
+    writer.add_scalars('loss/train_crit',{'val': crit_train_avm.val,'avg': crit_train_avm.avg})
+    writer.add_scalars('loss/train_gen',{'val': gen_train_avm.val,'avg': gen_train_avm.avg})
+
+
+    pbar.set_postfix({'crit_loss': crit_train_avm.avg, 'gen_loss': gen_train_avm.avg})
+
+ 
 
     # gen_scheduler.step()
     # crit_scheduler.step()
-    writer.add_scalars('loss/train_epoch',{'gen': gen_train_avm.avg,'crit': crit_train_avm.avg})
 
     
-    # TODO: Change this from validation every n training epochs to every n steps 
-    if epoch % VAL_EPOCH_EVERY_N_TRAIN_EPOCHS == 0:
+    # TODO: Change this from validation every n training epochs to every n steps (DONE!)
+    if step % VAL_EPOCH_EVERY_N_TRAIN_STEPS == 0:
+
         gen_model.eval()
         crit_model.eval()
         # val_avm.reset()
@@ -683,32 +663,31 @@ for epoch in (ep_bar := tqdm(range(1,EPOCHS+1), position=0)):
                 pbar.set_postfix({'crit_loss': crit_val_avm.avg, 'gen_loss': gen_val_avm.avg})
                 
                 
-                ## TODO: Changing this from fixed index to random index or even random samples across batches
+                # TODO: Changing this from fixed index to random index or even random samples across batches
                 if (idx + 1) == 5:
                     writer.add_figure('sample_images',create_logging_plot(inputs.float(), condition.float(), generated.float()))   
 
-    writer.add_scalars('loss/val_epoch',{'gen': gen_val_avm.avg,'crit': crit_val_avm.avg})
+        writer.add_scalars('loss/val_epoch',{'gen': gen_val_avm.avg,'crit': crit_val_avm.avg})
 
 
 
-    if epoch % (SAVE_CHECKPOINT_EVERY_N_VAL_EPOCHS * VAL_EPOCH_EVERY_N_TRAIN_EPOCHS) == 0:
+    if step % (SAVE_CHECKPOINT_EVERY_N_VAL_EPOCHS * VAL_EPOCH_EVERY_N_TRAIN_STEPS) == 0:
         for sub_dir in SUB_CKPT_DIR:
             if 'encoder' in sub_dir:
                 save_checkpoint(sub_dir, model= gen_model.encoder, optimizer= gen_optimizer, scheduler= None, \
-                                loss_meter= gen_val_avm,best_loss= gen_best_loss, epoch= epoch, writer = None)
+                                loss_meter= gen_val_avm,best_loss= gen_best_loss, step = step, writer = None)
                 
             elif 'decoder' in sub_dir:
                 loss = save_checkpoint(sub_dir, model= gen_model.decoder, optimizer= gen_optimizer, scheduler= None, \
-                                loss_meter= gen_val_avm,best_loss= gen_best_loss, epoch= epoch, writer = None)
+                                loss_meter= gen_val_avm,best_loss= gen_best_loss, step = step, writer = None)
                 gen_best_loss = gen_best_loss if loss is None else loss
             elif 'critic' in sub_dir:
                 loss = save_checkpoint(sub_dir, model= crit_model, optimizer= crit_optimizer, scheduler= None, \
-                                loss_meter= crit_val_avm,best_loss= crit_best_loss, epoch= epoch, writer = None)        
+                                loss_meter= crit_val_avm,best_loss= crit_best_loss, step = step, writer = None)        
                 crit_best_loss = crit_best_loss if loss is None else loss            
             
             
-    ep_bar.set_postfix({'train_gen_loss': gen_train_avm.avg, 'val_gen_loss': gen_val_avm.avg,
-                        'train_crit_loss': crit_train_avm.avg, 'val_crit_loss': crit_val_avm.avg})
+
 
 
 
