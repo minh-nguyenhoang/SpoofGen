@@ -8,7 +8,7 @@ from ..utils import Conv2d_cd
 class ScaledTanh(nn.Module):
     def __init__(self, scale = 10) -> None:
         super().__init__()
-        self.scale = nn.Parameter(scale, requires_grad= False)
+        self.scale = nn.Parameter(torch.tensor(scale), requires_grad= False)
     
     def foward(self, x):
         return self.scale * F.tanh(x)
