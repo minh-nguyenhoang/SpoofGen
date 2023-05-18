@@ -14,7 +14,7 @@ class ScaledTanh(nn.Module):
         return self.scale * F.tanh(x)
 
 class Critic(nn.Module):
-    def __init__(self, input_dims = (256,256,3)) -> None:
+    def __init__(self, input_dims = (256,256,3), score_scale = 10) -> None:
         super().__init__()
         self.input_dims = input_dims
 
@@ -48,7 +48,7 @@ class Critic(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Flatten(),
             nn.Linear(32*32,1),
-            ScaledTanh()
+            ScaledTanh(score_scale)
         )
 
 
