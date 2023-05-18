@@ -10,7 +10,7 @@ class ScaledTanh(nn.Module):
         super().__init__()
         self.scale = nn.Parameter(torch.tensor(scale), requires_grad= False)
     
-    def foward(self, x):
+    def forward(self, x):
         return self.scale * F.tanh(x)
 
 class Critic(nn.Module):
