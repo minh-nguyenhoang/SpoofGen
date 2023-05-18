@@ -67,7 +67,7 @@ class Critic(nn.Module):
     def get_grad(self):
         grad = []
         for param in self.parameters():
-            grad.append(param.grad.clone().detach())
+            grad.append(param.grad.clone().detach() if param.grad is not None else None)
         self.grad_ = grad
         del grad
     
