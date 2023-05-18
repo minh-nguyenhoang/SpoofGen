@@ -73,6 +73,9 @@ class Critic(nn.Module):
     
     def load_grad(self):
         for param in self.parameters():
-            param.grad.copy_(self.grad_.pop(0))
+            if param.grad is not None:
+                param.grad.copy_(self.grad_.pop(0))  
+            else:
+                continue
 
         del self.grad_
