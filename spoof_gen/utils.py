@@ -17,7 +17,10 @@ class AverageMeter(object):
         self.count = 0
 
     def update(self, val : float, n=1):
-        self.val = val
+        if math.isnan(val):
+            self.val = self.avg
+        else:
+            self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
@@ -40,7 +43,10 @@ class ExponentialMeter(object):
             self.count = 0
 
     def update(self, val : float):
-        self.val = val
+        if math.isnan(val):
+            self.val = self.avg
+        else:
+            self.val = val
         self.count += 1
         self.avg = self.weight * val + (1 - self.weight) * self.avg
    
