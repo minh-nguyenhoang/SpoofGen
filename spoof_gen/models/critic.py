@@ -63,7 +63,7 @@ class Critic(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Flatten(),
             nn.Linear(32*32,1),
-#             ScaledTanh(score_scale)
+            nn.Sigmoid()
         )
 
 
