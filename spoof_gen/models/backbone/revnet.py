@@ -111,20 +111,20 @@ class RevBottleneck(nn.Module):
 class RevResNet(nn.Module):
     def __init__(self, block, num_blocks, self_attn = True):
         super(RevResNet, self).__init__()
-        self.in_planes = 16
+        self.in_planes = 64
         self.self_attn = self_attn
         self.conv1 = nn.Sequential(nn.Conv2d(2, self.in_planes, kernel_size=3, stride=1, padding=1, bias=False),
                                    PixelNorm(self.in_planes),
                                    nn.ReLU(inplace=True),
                                 #    nn.Upsample(scale_factor=2, mode= 'bilinear')
                                    )
-        self.layer1 = self._make_layer(block, 32, num_blocks[0], stride=2)
-        self.layer2 = self._make_layer(block, 24, num_blocks[1], stride=2)
-        self.layer3 = self._make_layer(block, 16, num_blocks[2], stride=2)
-        self.layer4 = self._make_layer(block, 8, num_blocks[3], stride=2)
+        self.layer1 = self._make_layer(block, 256, num_blocks[0], stride=2)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 32, num_blocks[3], stride=2)
 
         # last layer to compress channel down to 3
-        self.last_conv = nn.Sequential(nn.Conv2d(8 * block.expansion,3,kernel_size = 1),
+        self.last_conv = nn.Sequential(nn.Conv2d(32 * block.expansion,3,kernel_size = 1),
                                        nn.Sigmoid())
 
         
