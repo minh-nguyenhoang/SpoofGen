@@ -137,7 +137,7 @@ class Generator(nn.Module):
 
         out = self.decoder(z,condition)    # [N,3,256,256]
 
-        return out, condition, (mu, log_var)
+        return out, condition, mu, log_var
     
     def sample(self,
             num_samples:int,
