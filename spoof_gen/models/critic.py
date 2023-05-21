@@ -75,8 +75,8 @@ class Critic(nn.Module):
         # print(x.shape)
         input = torch.cat([x,map_x],dim = 1)
 
-        feaure = self.feature_extractor(input)
-        score = self.critic(feaure)
+        feature = self.feature_extractor(input)
+        score = self.critic(feature)
         cls = self.aux_cls(feature)
 
         return score, cls
