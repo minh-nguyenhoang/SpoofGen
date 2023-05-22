@@ -102,7 +102,7 @@ class Decoder(nn.Module):
 
         inp = torch.cat([z,condition.unsqueeze(1)],dim = 1) #[N,2,32,32]
         # return torch.sigmoid(self.up(inp))
-        return self.up(inp)
+        return self.up(inp).clip(0,1)
     
 class Generator(nn.Module):
     def __init__(self, encoder:Encoder, decoder:Decoder, con_gen: nn.Module) -> None:
