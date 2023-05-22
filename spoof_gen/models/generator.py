@@ -101,6 +101,7 @@ class Decoder(nn.Module):
     def forward(self,z, condition):
 
         inp = torch.cat([z,condition.unsqueeze(1)],dim = 1) #[N,2,32,32]
+        # return torch.sigmoid(self.up(inp))
         return self.up(inp)
     
 class Generator(nn.Module):

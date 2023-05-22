@@ -34,7 +34,7 @@ class Critic(nn.Module):
             nn.ReLU(),)  #[16,16]
         
         self.feature_extractor = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False),
             # nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2),
             nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False),
@@ -67,14 +67,15 @@ class Critic(nn.Module):
         )
 
 
-    def forward(self,x, condition):
+    def forward(self,x, condition= None):
         # map_x = self.con_gen(x,condition)
         
-        map_x = self.upsampler(condition.unsqueeze(1))
+        # map_x = self.upsampler(condition.unsqueeze(1))
         # print(map_x.shape)
         # print(x.shape)
-        input = torch.cat([x,map_x],dim = 1)
+        # input = torch.cat([x,map_x],dim = 1)
 
+        input = x
         feature = self.feature_extractor(input)
         score = self.critic(feature)
         cls = self.aux_cls(feature)
