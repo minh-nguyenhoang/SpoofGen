@@ -48,7 +48,7 @@ class ExponentialMeter(object):
         else:
             self.val = val
         self.count += 1
-        self.avg = self.weight * val + (1 - self.weight) * self.avg
+        self.avg = self.avg = self.val if self.count == 1 else self.weight * val + (1 - self.weight) * self.avg
    
 def get_infinite_data(data_loader, n, init_step :int = None):
     step = 0 if init_step is None else init_step

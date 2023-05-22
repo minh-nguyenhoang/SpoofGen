@@ -2,9 +2,37 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 import multiprocessing as mp
+from multiprocessing import Pool, Queue
 USE_TENSORBOARD = False
 USE_COMET = False
 USE_NEPTUNE = False
+
+class DummyLogger:
+    def __init__(self,*args, **kwargs) -> None:
+        pass
+    def add_scalar(self,*args, **kwargs):
+        pass
+    def add_scalars(self,*args, **kwargs):
+        pass
+    def add_figure(self,*args, **kwargs):
+        pass
+    def add_image(self,*args, **kwargs):
+        pass
+    def add_images(self,*args, **kwargs):
+        pass
+    def add_text(self,*args, **kwargs):
+        pass
+    def add_audio(self,*args, **kwargs):
+        pass
+
+def to_queue(tag, queue = 'queue'):
+    def _wrapper(f):    
+        def _wrap_func(instance,*args, **kwargs):
+            getattr(instance,queue).put({"args":args,"kwargs":kwargs, "tag": tag})
+            f(instance, *args, **kwargs)
+        return _wrap_func
+    return _wrapper
+
 
 class Logger:
     def __init__(self, log_dir= None, **kwargs) -> None:
@@ -17,9 +45,15 @@ class Logger:
             self.content = {}
         else:
             self.content = self.get_content()
+        
+        self.queue = Queue()
+        self.worker = Pool(14)
 
+
+    @to_queue('scalar')
     def add_scalar(self, name, value, step = -1):
         pass
+    @to_queue('scalar_dict')
     def add_scalars(self, name, values, step = -1):
         pass
     def add_figure(self,name, figure):
